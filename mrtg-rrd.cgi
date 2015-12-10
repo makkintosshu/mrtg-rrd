@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mrtg-rrd.cgi,v 1.6 2002/01/04 17:13:27 kas Exp $
+# $Id: mrtg-rrd.cgi,v 1.12 2002/01/09 17:31:55 kas Exp $
 #
 # mrtg-rrd.cgi: The script for generating graphs for MRTG statistics.
 #
@@ -35,15 +35,15 @@ use vars qw(@config_files @all_config_files %targets %config $config_time
 	%directories $version);
 
 # EDIT THIS to reflect all your MRTG config files
-BEGIN { @config_files = qw(/home/fadmin/mrtg/new/mrtg.cfg); }
+BEGIN { @config_files = qw(/home/fadmin/mrtg/mrtg.cfg); }
 
-$version = '0.3';
+$version = '0.4';
 
 sub handler ($)
 {
 	my ($q) = @_;
 
-	try_read_config();
+	try_read_config($q->url());
 
 	my $path = $q->path_info();
 	$path =~ s/^\///;
@@ -218,6 +218,7 @@ sub html_graph($$$$$)
 	}
 
 	my @percent = do_percent($tgt, \@values);
+	my @relpercent = do_relpercent($tgt, \@values);
 
 	my @nv;
 	for my $val (@values) {
@@ -266,13 +267,13 @@ EOF
 		print <<"EOF";
     </TR><TR>
 	<TD ALIGN=RIGHT><SMALL>Max <FONT COLOR="$tgt->{col5}">&nbsp;Percentage:</FONT></SMALL></TD>
-	<TD ALIGN=RIGHT><SMALL>&nbsp;$percent[6]</SMALL></TD>
+	<TD ALIGN=RIGHT><SMALL>&nbsp;$relpercent[0]</SMALL></TD>
 	<TD WIDTH=5></TD>
 	<TD ALIGN=RIGHT><SMALL>Average <FONT COLOR="$tgt->{col5}">&nbsp;Percentage:</FONT></SMALL></TD>
-	<TD ALIGN=RIGHT><SMALL>&nbsp;$percent[7]</SMALL></TD>
+	<TD ALIGN=RIGHT><SMALL>&nbsp;$relpercent[1]</SMALL></TD>
 	<TD WIDTH=5></TD>
 	<TD ALIGN=RIGHT><SMALL>Current <FONT COLOR="$tgt->{col5}">&nbsp;Percentage:</FONT></SMALL></TD>
-	<TD ALIGN=RIGHT><SMALL>&nbsp;$percent[8]</SMALL></TD>
+	<TD ALIGN=RIGHT><SMALL>&nbsp;$relpercent[2]</SMALL></TD>
 EOF
 	}
 	print <<'EOF';
@@ -285,7 +286,7 @@ sub do_percent($$)
 {
 	my ($tgt, $values) = @_;
 
-	my @percent = ('', '', '', '', '', '', '', '', '');
+	my @percent = ('', '', '', '', '', '');
 
 	return @percent if defined $tgt->{options}{nopercent};
 
@@ -296,16 +297,25 @@ sub do_percent($$)
 		$percent[$val] = ' (' . $p . '%)';
 	}
 
-	if (defined $tgt->{options}{dorelpercent}) {
-		for my $val (0..2) {
-			$percent[6+$val] = sprintf("%.1f", 
-				$values->[2*$val+1] * 100 / $values->[2*$val])
-				if $values->[2*$val] > 0;
-			$percent[6+$val] ||= 0;
-			$percent[6+$val] .= ' %';
-		}
+	@percent;
+}
+
+sub do_relpercent($$)
+{
+	my ($tgt, $values) = @_;
+
+	my @percent = ('', '', '');
+
+	return @percent unless defined $tgt->{options}{dorelpercent};
+
+	for my $val (0..2) {
+		$percent[$val] = sprintf("%.1f", 
+			$values->[2*$val+1] * 100 / $values->[2*$val])
+			if $values->[2*$val] > 0;
+		$percent[$val] ||= 0;
+		$percent[$val] .= ' %';
 	}
-			
+
 	@percent;
 }
 
@@ -394,6 +404,9 @@ sub do_image($$)
 	my @rv = RRDs::graph($file, '-s', "-$back", @local_args,
 		@{$target->{args}}, "VRULE:$oldsec#ff0000",
 		"VRULE:$seconds#ff0000", @local_args_end);
+
+	my $rrd_error = RRDs::error;
+	print_error("RRDs::graph failed, $rrd_error") if defined $rrd_error;
 
 	# In array context just return the values
 	return @rv if wantarray;
@@ -583,8 +596,15 @@ sub common_args($$$)
 	@args;
 }
 
-sub try_read_config()
+sub try_read_config($)
 {
+	my ($prefix) = (@_);
+
+	# Verify the version of RRDtool:
+	if (!defined $RRDs::VERSION || $RRDs::VERSION < 1.000331) {
+		print_error("Please install more up-to date RRDtool - need at least 1.000331");
+	}
+	
 	my $read_cfg;
 	if (!defined $config_time) {
 		$read_cfg = 1;
@@ -617,7 +637,6 @@ sub try_read_config()
 	%config = (
 		refresh => 300,
 		interval => 300,
-		icondir => '.',
 	);
 
 	%targets = ();
@@ -644,6 +663,11 @@ sub try_read_config()
 #	if (defined $config{libadd}) {
 #		use lib $config{libadd}
 #	}
+
+	unless (defined $config{icondir}) {
+		$prefix =~ s/\/[^\/]*$//;
+		$config{icondir} = $prefix;
+	}
 
 	parse_directories();
 
@@ -706,8 +730,8 @@ sub read_mrtg_config($$$)
 			push @all_config_files, $1;
 			read_mrtg_config($1, $def, $order);
 			next;
-		} elsif (/^([\w\d]+) *: *(\S*)$/) {
-			my ($opt, $val) = (lc($1), lc($2));
+		} elsif (/^([\w\d]+) *: *(\S.*)$/) {
+			my ($opt, $val) = (lc($1), $2);
 			$config{$opt} = $val;
 			next;
 		}
@@ -726,21 +750,14 @@ sub parse_directories {
 
 		my $prefix = '';
 		for my $component (split /\/+/, $dir) {
-			add_dir($prefix, $component);
+			push (@{$directories{$prefix}{subdir}}, $component)
+				unless defined
+					$directories{$prefix.$component};
 			$prefix .= $component . '/';
 		}
 
-		add_dir($dir, $name);
-
+		push (@{$directories{$dir}{target}}, $name);
 	}
-}
-
-sub add_dir($$) {
-	my ($dir, $name) = @_;
-
-	@{$directories{$dir}} = () unless defined $directories{$dir};
-	push (@{$directories{$dir}}, $name)
-		unless defined $directories{$dir.$name};
 }
 
 sub print_dir($) {
@@ -755,28 +772,46 @@ sub print_dir($) {
 <HEAD>
 <TITLE>MRTG: Directory $dir1</TITLE>
 </HEAD>
-<H1>MRTG graphs and subdirectories in directory $dir1</H1>
+EOF
+	my $subdirs_printed;
+	if (defined @{$directories{$dir}{subdir}}) {
+		$subdirs_printed = 1;
+		print <<EOF;
+<H1>MRTG subdirectories in the directory $dir1</H1>
 
 <UL>
 EOF
-	for my $item (@{$directories{$dir}}) {
-		if (defined $targets{$item}) {
+		for my $item (@{$directories{$dir}{subdir}}) {
+			print "<LI><A HREF=\"$item/\">$item/</A>\n";
+		}
+
+		print "</UL>\n";
+	}
+	if (defined @{$directories{$dir}{target}}) {
+		print "<HR>\n" if defined $subdirs_printed;
+		print <<EOF;
+<H1>MRTG graphs in the directory $dir1</H1>
+
+<TABLE BORDER=0 WIDTH=100%>
+EOF
+		my $odd;
+		for my $item (@{$directories{$dir}{target}}) {
 			my $itemname = $item;
 			$itemname = $targets{$item}{title}
 				if defined $targets{$item}{title};
+			print "    <TR>\n" unless $odd;
 			print <<EOF;
-<LI><A HREF="$item.html">$itemname<BR>
+   <TD><A HREF="$item.html">$itemname<BR>
 	<IMG SRC="$item-day.png" BORDER=0 ALIGN=TOP VSPACE=10 ALT="$item">
 	</A><BR CLEAR=ALL>
+   </TD>
 EOF
-		} else {
-			print <<EOF;
-<LI><A HREF="$item/">$item/</A>
-EOF
-		}
+			print "    </TR>\n" if $odd;
+			$odd = !$odd;
+		} 
+		print "    </TR>\n</TABLE>\n";
 	}
 
-	print "</UL>\n";
 	print_banner();
 	print "</BODY>\n</HTML>\n";
 }
@@ -823,7 +858,7 @@ version 2.9.17</font></td>
 </tr>
 </table>
 EOF
-
+	print '<!--$Id: mrtg-rrd.cgi,v 1.12 2002/01/09 17:31:55 kas Exp $-->', "\n";
 }
 
 sub dump_targets() {

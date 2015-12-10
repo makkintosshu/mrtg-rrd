@@ -1,24 +1,52 @@
-$Id: ChangeLog,v 1.2 2002/01/04 17:13:26 kas Exp $
-
-Fri Jan  4 18:00:39 CET 2002
-
-Directory mode almost fully implemented.
-Bumped the version number to 0.3
+$Id: ChangeLog,v 1.6 2002/01/09 16:32:30 kas Exp $
 
 
-Wed Jan  2 17:57:31 CET 2002
+===================================================================
+RELEASE 0.4
 
-The Directory[] directive is now visible in the URL.
+* Wed Jan  9 13:50:29 CET 2002
+	Fixed the incorrect behaviour when IconDir is not set. Now it displays
+		the icons from the same directory where the script is located.
+	Fixed the misplaced lc() in the config dir name (bug reported by
+		Peter Banfi).
+	Added few bug-hunting tips to the FAQ.
+	Reformated the ChangeLog to the more readable/structured form.
+	Implemented the double-column directory output. When the directory
+		contains both subdirectories and graphs, the directory index
+		consists of two sections - subdirs first and then graphs.
+	The HTML files contain the RCS id of the script in comment in the
+		banner part.
+	Bumped the version number to 0.4
+
+* Tue Jan  8 10:03:41 CET 2002
+	Older versions of RRDtool do not grok the "-g" switch. Added testing
+		the $RRDs::VERSION.
+
+* Mon Jan  7 16:10:39 CET 2002
+	Configuration file directives can have values including whitespace
+		(thanks to Petr Prazak for discovering this).
+	Added checking of the RRD::graph's error code (as suggested by
+		Petr Prazak).
 
 
-Tue Dec 18 14:06:29 CET 2001
+===================================================================
+RELEASE 0.3
 
-Implemented the following mrtg.cfg directives:
-	Unscaled, WithPeak, XZoom, YZoom
-Fixed the wrong behaviour of XScale, YScale.
-Added $version as the separate variable.
-Fixed the global options so that the graph still starts at y_min=0, even
-	if there is no time when the variable is near 0.
-Fixed the [^], [_], and [$] behaviour for multiple configuration files
-	(the value should not remain defined from the previous cfg. file).
+* Fri Jan  4 18:00:39 CET 2002
+	Directory mode almost fully implemented.
+	Bumped the version number to 0.3
+
+* Wed Jan  2 17:57:31 CET 2002
+	The Directory[] directive is now visible in the URL.
+
+* Tue Dec 18 14:06:29 CET 2001
+	Implemented the following mrtg.cfg directives:
+		Unscaled, WithPeak, XZoom, YZoom
+	Fixed the wrong behaviour of XScale, YScale.
+	Added $version as the separate variable.
+	Fixed the global options so that the graph still starts at y_min=0,
+		even if there is no time when the variable is near 0.
+	Fixed the [^], [_], and [$] behaviour for multiple configuration files
+		(the value should not remain defined from the previous
+		cfg. file).
 
