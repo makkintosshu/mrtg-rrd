@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mrtg-rrd.cgi,v 1.3 2001/12/17 17:17:42 kas Exp $
+# $Id: mrtg-rrd.cgi,v 1.6 2002/01/04 17:13:27 kas Exp $
 #
 # mrtg-rrd.cgi: The script for generating graphs for MRTG statistics.
 #
@@ -31,10 +31,13 @@ use POSIX qw(strftime);
 use lib '/usr/lib/perl5/5.00503/i386-linux';
 use RRDs;
 
-use vars qw(@config_files @all_config_files %targets %config $config_time);
+use vars qw(@config_files @all_config_files %targets %config $config_time
+	%directories $version);
 
 # EDIT THIS to reflect all your MRTG config files
-BEGIN { @config_files = qw(/home/fadmin/mrtg/mrtg.cfg); }
+BEGIN { @config_files = qw(/home/fadmin/mrtg/new/mrtg.cfg); }
+
+$version = '0.3';
 
 sub handler ($)
 {
@@ -42,14 +45,28 @@ sub handler ($)
 
 	try_read_config();
 
-	my ($stat, $ext) = ($q->path_info() =~
-		/^\/(.+)(\.html|-(day|week|month|year)\.png)$/);
+	my $path = $q->path_info();
+	$path =~ s/^\///;
+	$path =~ s/\/$//;
+	if (defined $directories{$path}) {
+		if ($q->path_info() =~ /\/$/) {
+			print_dir($path);
+		} else {
+			print "Location: ", $q->url(-path_info=>1), "/\n\n";
+		}
+		return;
+	}
 
-#	$stat ||= 'ares.fi.muni.cz.eth2';
-#	$ext ||= '.html';
+	my ($dir, $stat, $ext) = ($q->path_info() =~
+		/^(.*)\/([^\/]+)(\.html|-(day|week|month|year)\.png)$/);
+
+	$dir =~ s/^\///;
 
 	print_error("Undefined statistics")
 		unless defined $targets{$stat};
+
+	print_error("Incorrect directory")
+		unless defined $targets{$stat}{direcory} || $targets{$stat}{directory} eq $dir;
 
 	my $tgt = $targets{$stat};
 
@@ -89,7 +106,7 @@ sub do_html($)
 	my @month = do_image($tgt, 'month');
 	my @year  = do_image($tgt, 'year');
 
-	http_headers('text/html', $tgt);
+	http_headers('text/html');
 	print <<'EOF';
 <HTML>
 <HEAD>
@@ -122,55 +139,38 @@ EOF
 	html_graph($tgt, 'month', 'Monthly', '2 Hour', \@month);
 	html_graph($tgt, 'year', 'Yearly', '1 Day', \@year);
 
-	print <<"EOF" unless defined $tgt->{options}{nolegend};
-<HR><table WIDTH=500 BORDER=0 CELLPADDING=4 CELLSPACING=0>
-<tr><td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col1}">
-<b>$tgt->{colname1} ###</b></font></td>
-<td><font SIZE=-1>$tgt->{legend1}</font></td></tr> <tr><td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col2}">
-<b>$tgt->{colname2} ###</b></font></td>
-<td><font SIZE=-1>$tgt->{legend2}</font></td></tr> </table>
-EOF
-	print <<"EOF" unless defined $tgt->{options}{nobanner};
-
+	unless (defined $tgt->{options}{nolegend}) {
+		print <<EOF;
 <HR>
-<table BORDER=0 CELLSPACING=0 CELLPADDING=0>
-<tr>
-<td WIDTH=63><a ALT="MRTG"
-    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-l.png"></a></td>
-<td WIDTH=25><a ALT=""
-    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-m.png"></a></td>
-<td WIDTH=388><a ALT=""
-    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-r.png"></a></td>
-</tr>
-</table>
-<spacer TYPE=VERTICAL SIZE=4>
-<table BORDER=0 CELLSPACING=0 CELLPADDING=0 WIDTH=476>
-<tr VALIGN=top>
-<td ALIGN=LEFT><font FACE="Arial,Helvetica" SIZE=2>
-version 2.9.17</font></td>
-<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
-<a HREF="http://ee-staff.ethz.ch/~oetiker/">Tobias Oetiker</a>
-<a HREF="mailto:oetiker\@ee.ethz.ch">&lt;oetiker\@ee.ethz.ch&gt;</a>
-</font></td>
-</tr><tr>
-<td></td>
-<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
-<and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:dlr\@bungi.com">&lt;dlr\@bungi.com&gt;</a></font>
-</td>
-<tr VALIGN=top>
-<td ALIGN=LEFT><font FACE="Arial,Helvetica" SIZE=2>
-<A HREF=http://www.fi.muni.cz/~kas/mrtg-rrd/>mrtg-rrd.cgi version 0.1</A>
-</font></td>
-<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
-<A HREF="http://www.fi.muni.cz/~kas/">Jan "Yenya" Kasprzak</A>
-<A HREF="mailto:kas\@fi.muni.cz">&lt;kas\@fi.muni.cz&gt;</A>
-</font></td>
-</tr>
-</table>
+<table WIDTH=500 BORDER=0 CELLPADDING=4 CELLSPACING=0>
+    <tr>
+	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col1}">
+		<b>$tgt->{colname1} ###</b></font></td>
+	<td><font SIZE=-1>$tgt->{legend1}</font></td>
+    </tr><tr>
+	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col2}">
+		<b>$tgt->{colname2} ###</b></font></td>
+	<td><font SIZE=-1>$tgt->{legend2}</font></td>
 EOF
+		if ($tgt->{withpeak} ne '') {
+			print <<EOF;
+    </tr><tr>
+	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col3}">
+		<b>$tgt->{colname3} ###</b></font></td>
+	<td><font SIZE=-1>$tgt->{legend3}</font></td>
+    </tr><tr>
+	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col4}">
+		<b>$tgt->{colname4} ###</b></font></td>
+	<td><font SIZE=-1>$tgt->{legend4}</font></td>
+EOF
+		}
+		print <<EOF;
+    </tr> </table>
+EOF
+	}
+
+	print_banner() unless defined $tgt->{options}{nobanner};
+
 	print $tgt->{pagefoot} if defined $tgt->{pagefoot};
 	print "\n", <<'EOF';
 </body>
@@ -204,8 +204,8 @@ sub html_graph($$$$$)
 	my $x = $params->[1];
 	my $y = $params->[2];
 
-	$x *= $tgt->{xscale} if defined $tgt->{xscale};
-	$y *= $tgt->{yscale} if defined $tgt->{yscale};
+	$x *= $tgt->{xzoom} if defined $tgt->{xzoom};
+	$y *= $tgt->{yzoom} if defined $tgt->{yzoom};
 
 	my $kilo = $tgt->{kilo};
 	my @kmg = split(',', $tgt->{kmg});
@@ -309,9 +309,9 @@ sub do_percent($$)
 	@percent;
 }
 
-sub http_headers($$)
+sub http_headers($)
 {
-	my ($content_type, $target) = @_;
+	my ($content_type) = @_;
 
 	print <<"EOF";
 Content-Type: $content_type
@@ -325,7 +325,7 @@ EOF
 	print "\n";
 }
 
-sub do_image($$$)
+sub do_image($$)
 {
 	my ($target, $ext) = @_;
 
@@ -341,39 +341,65 @@ sub do_image($$$)
 	my $oldsec;
 	my $back;
 
+	my $unscaled;
+	my $withpeak;
+
 	if ($ext eq 'day') {
 		$seconds = strftime("%s", @t);
 		$back = 30*3600;	# 30 hours
 		$oldsec = $seconds - 86400;
+		$unscaled = 1 if $target->{unscaled} =~ /d/;
+		$withpeak = 1 if $target->{withpeak} =~ /d/;
 	} elsif ($ext eq 'week') {
 		$seconds = strftime("%s", @t);
 		$t[6] = ($t[6]+6) % 7;
 		$seconds -= $t[6]*86400;
 		$back = 8*86400;	# 8 days
 		$oldsec = $seconds - 7*86400;
+		$unscaled = 1 if $target->{unscaled} =~ /w/;
+		$withpeak = 1 if $target->{withpeak} =~ /w/;
 	} elsif ($ext eq 'month') {
 		$t[3] = 1;
 		$seconds = strftime("%s", @t);
 		$back = 36*86400;	# 36 days
 		$oldsec = $seconds - 30*86400; # FIXME (the right # of days!!)
+		$unscaled = 1 if $target->{unscaled} =~ /m/;
+		$withpeak = 1 if $target->{withpeak} =~ /m/;
 	} elsif ($ext eq 'year') {
 		$t[3] = 1;
 		$t[4] = 0;
 		$seconds = strftime("%s", @t);
 		$back = 396*86400;	# 365 + 31 days
 		$oldsec = $seconds - 365*86400; # FIXME (the right # of days!!)
+		$unscaled = 1 if $target->{unscaled} =~ /y/;
+		$withpeak = 1 if $target->{withpeak} =~ /y/;
 	} else {
 		print_error("Unknown file extension: $ext");
 	}
 
-	my @rv = RRDs::graph($file, '-s', "-$back", @{$target->{args}},
-		"VRULE:$oldsec#ff0000", "VRULE:$seconds#ff0000");
+	my @local_args;
+
+	if ($unscaled) {
+		@local_args = ('-u', $target->{maxbytes1});
+		push @local_args, '--rigid' unless defined $target->{absmax};
+	}
+
+	my @local_args_end;
+
+	if ($withpeak) {
+		push @local_args_end, 'LINE1:maxin'.$target->{col3}.':MaxIn',
+			'LINE1:maxout'.$target->{col4}.':MaxOut';
+	}
+
+	my @rv = RRDs::graph($file, '-s', "-$back", @local_args,
+		@{$target->{args}}, "VRULE:$oldsec#ff0000",
+		"VRULE:$seconds#ff0000", @local_args_end);
 
 	# In array context just return the values
 	return @rv if wantarray;
 
 	# Not in array context ==> print out the PNG file.
-	http_headers('image/png', $target);
+	http_headers('image/png');
 		
 	open PNG, "<$file" or print_error("Can't open $file: $!");
 	my $buf;
@@ -392,20 +418,20 @@ sub common_args($$$)
 
 	$target->{name} = $name;
 
-	if (defined $target->{directory}) {
-		$target->{directory} .= '/'
-			unless $target->{directory} =~ /\/$/;
-	} else {
-		$target->{directory} = '';
-	}
+	$target->{directory} = ''
+		unless defined $target->{directory};
 
-	$target->{url} = $q->url . '/' . $name;
+	my $tdir = $target->{directory};
+	$tdir .= '/'
+		unless $tdir eq '' || $tdir =~ /\/$/;
+
+	$target->{url} = $q->url . '/' . $tdir . $name;
 
 	my $dir = $config{workdir};
 	$dir = $config{logdir}
 		if defined $config{logdir};
 
-	$target->{rrd}   = $dir . '/' . $target->{directory} . $name . '.rrd';
+	$target->{rrd} = $dir . '/' . $tdir . $name . '.rrd';
 
 	%{$target->{options}} = ()
 		unless defined %{$target->{options}};
@@ -416,13 +442,13 @@ sub common_args($$$)
 
 	$target->{suppress} ||= '';
 
-	$target->{day}   = $dir . '/' . $target->{directory} . $name
-		. '-day.png' unless $target->{suppress} =~ /d/;
-	$target->{week}  = $dir . '/' . $target->{directory} . $name
+	$target->{day}   = $dir . '/' . $tdir . $name
+		. '-day.png' unless $tdir =~ /d/;
+	$target->{week}  = $dir . '/' . $tdir . $name
 		. '-week.png' unless $target->{suppress} =~ /w/;
-	$target->{month} = $dir . '/' . $target->{directory} . $name
+	$target->{month} = $dir . '/' . $tdir . $name
 		. '-month.png' unless $target->{suppress} =~ /m/;
-	$target->{year}  = $dir . '/' . $target->{directory} . $name
+	$target->{year}  = $dir . '/' . $tdir . $name
 		. '-year.png' unless $target->{suppress} =~ /y/;
 
 	$target->{maxbytes1} = $target->{maxbytes}
@@ -435,7 +461,7 @@ sub common_args($$$)
 
 	push @args, '--lazy', '-c', 'FONT#000000', '-c',
 		'MGRID#000000', '-c', 'FRAME#000000',
-		'-g';
+		'-g', '-l', '0';
 
 	$target->{background} = '#f5f5f5'
 		unless defined $target->{background};
@@ -455,11 +481,21 @@ sub common_args($$$)
 	push @args, '-b', $target->{kilo}
 		if defined $target->{kilo};
 
-	push @args, '-w', $target->{xsize}
-		if defined $target->{xsize};
+	if (defined $target->{xsize}) {
+		if (defined $target->{xscale}) {
+			push @args, '-w', $target->{xsize}*$target->{xscale};
+		} else {
+			push @args, '-w', $target->{xsize};
+		}
+	}
 
-	push @args, '-h', $target->{ysize}
-		if defined $target->{ysize};
+	if (defined $target->{ysize}) {
+		if (defined $target->{yscale}) {
+			push @args, '-h', $target->{ysize}*$target->{yscale};
+		} else {
+			push @args, '-h', $target->{ysize};
+		}
+	}
 
 	my $scale = 1;
 	
@@ -477,6 +513,10 @@ sub common_args($$$)
 			unless defined $target->{legend1};
 		$target->{legend2} = 'Outgoing Traffic in Bits per Second'
 			unless defined $target->{legend2};
+		$target->{legend3} = 'Peak Incoming Traffic in Bits per Second'
+			unless defined $target->{legend3};
+		$target->{legend4} = 'Peak Outgoing Traffic in Bits per Second'
+			unless defined $target->{legend4};
 		$target->{shortlegend} = 'b/s'
 			unless defined $target->{shortlegend};
 	} else {
@@ -486,6 +526,10 @@ sub common_args($$$)
 			unless defined $target->{legend1};
 		$target->{legend2} = 'Outgoing Traffic in Bytes per Second'
 			unless defined $target->{legend2};
+		$target->{legend3} = 'Peak Incoming Traffic in Bytes per Second'
+			unless defined $target->{legend3};
+		$target->{legend4} = 'Peak Outgoing Traffic in Bytes per Second'
+			unless defined $target->{legend4};
 		$target->{shortlegend} = 'B/s'
 			unless defined $target->{shortlegend};
 	}
@@ -494,10 +538,16 @@ sub common_args($$$)
 		push @args, "DEF:in0=$target->{rrd}:ds0:AVERAGE",
 			"CDEF:in=in0,$scale,*",
 			"DEF:out0=$target->{rrd}:ds1:AVERAGE",
-			"CDEF:out=out0,$scale,*";
+			"CDEF:out=out0,$scale,*",
+			"DEF:maxin0=$target->{rrd}:ds0:MAX",
+			"CDEF:maxin=maxin0,$scale,*",
+			"DEF:maxout0=$target->{rrd}:ds1:MAX",
+			"CDEF:maxout=maxout0,$scale,*";
 	} else {
 		push @args, "DEF:in=$target->{rrd}:ds0:AVERAGE",
-			"DEF:out=$target->{rrd}:ds1:AVERAGE";
+			"DEF:out=$target->{rrd}:ds1:AVERAGE",
+			"DEF:maxin=$target->{rrd}:ds0:MAX",
+			"DEF:maxout=$target->{rrd}:ds1:MAX";
 	}
 
 	my $i=1;
@@ -559,6 +609,9 @@ sub try_read_config()
 		colours => 'GREEN#00cc00,BLUE#0000ff,DARK GREEN#006600,MAGENTA#ff00ff,AMBER#ef9f4f',
 		legendi => '&nbsp;In:',
 		legendo => '&nbsp;Out:',
+		unscaled => '',
+		withpeak => '',
+		directory => '',
 	);
 
 	%config = (
@@ -569,15 +622,20 @@ sub try_read_config()
 
 	%targets = ();
 
-	%{$targets{_}} = %defaults;
-	%{$targets{'^'}} = ();
-	%{$targets{'$'}} = ();
-
 	@all_config_files = @config_files;
 
+	my $order = 0;
 	for my $cfgfile (@config_files) {
-		read_mrtg_config($cfgfile, \%defaults);
+		%{$targets{_}} = %defaults;
+		%{$targets{'^'}} = ();
+		%{$targets{'$'}} = ();
+
+		read_mrtg_config($cfgfile, \%defaults, \$order);
 	}
+
+	delete $targets{'^'};
+	delete $targets{_};
+	delete $targets{'$'};
 
 	if (defined $config{pathadd}) {
 		$ENV{PATH} .= ':'.$config{pathadd};
@@ -587,14 +645,16 @@ sub try_read_config()
 #		use lib $config{libadd}
 #	}
 
+	parse_directories();
+
 	$config_time = time;
 }
 
-sub read_mrtg_config($$);
+sub read_mrtg_config($$$);
 
-sub read_mrtg_config($$)
+sub read_mrtg_config($$$)
 {
-	my ($file, $def) = @_;
+	my ($file, $def, $order) = @_;
 
 	my %defaults = %$def;
 
@@ -620,6 +680,7 @@ sub read_mrtg_config($$)
 			my ($tgt, $opt, $val) = (lc($2), lc($1), $3);
 			unless (exists $targets{$tgt}) {
 				%{$targets{$tgt}} = %{$targets{_}};
+				$targets{$tgt}{order} = ++$$order;
 			}
 			if ($tgt eq '_' && $val eq '') {
 				if ($defaults{$opt}) {
@@ -643,7 +704,7 @@ sub read_mrtg_config($$)
 			next;
 		} elsif (/^Include *: *(\S*)$/) {
 			push @all_config_files, $1;
-			read_mrtg_config($1, $def);
+			read_mrtg_config($1, $def, $order);
 			next;
 		} elsif (/^([\w\d]+) *: *(\S*)$/) {
 			my ($opt, $val) = (lc($1), lc($2));
@@ -654,8 +715,118 @@ sub read_mrtg_config($$)
 	}
 }
 
-sub dump_targets() {
+sub parse_directories {
+	%directories = ();
 
+	# FIXME: the sort is expensive
+	for my $name (sort { $targets{$a}{order} <=> $targets{$b}{order} } keys %targets) {
+		my $dir = $targets{$name}{directory}
+			if defined $targets{$name}{directory};
+		$dir = '' unless defined $dir;
+
+		my $prefix = '';
+		for my $component (split /\/+/, $dir) {
+			add_dir($prefix, $component);
+			$prefix .= $component . '/';
+		}
+
+		add_dir($dir, $name);
+
+	}
+}
+
+sub add_dir($$) {
+	my ($dir, $name) = @_;
+
+	@{$directories{$dir}} = () unless defined $directories{$dir};
+	push (@{$directories{$dir}}, $name)
+		unless defined $directories{$dir.$name};
+}
+
+sub print_dir($) {
+	my ($dir) = @_;
+
+	my $dir1 = $dir . '/';
+
+	http_headers('text/html');
+
+	print <<EOF;
+<HTML>
+<HEAD>
+<TITLE>MRTG: Directory $dir1</TITLE>
+</HEAD>
+<H1>MRTG graphs and subdirectories in directory $dir1</H1>
+
+<UL>
+EOF
+	for my $item (@{$directories{$dir}}) {
+		if (defined $targets{$item}) {
+			my $itemname = $item;
+			$itemname = $targets{$item}{title}
+				if defined $targets{$item}{title};
+			print <<EOF;
+<LI><A HREF="$item.html">$itemname<BR>
+	<IMG SRC="$item-day.png" BORDER=0 ALIGN=TOP VSPACE=10 ALT="$item">
+	</A><BR CLEAR=ALL>
+EOF
+		} else {
+			print <<EOF;
+<LI><A HREF="$item/">$item/</A>
+EOF
+		}
+	}
+
+	print "</UL>\n";
+	print_banner();
+	print "</BODY>\n</HTML>\n";
+}
+
+sub print_banner() {
+	print <<EOF;
+
+<HR>
+<table BORDER=0 CELLSPACING=0 CELLPADDING=0>
+<tr>
+<td WIDTH=63><a ALT="MRTG"
+    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
+BORDER=0 SRC="$config{icondir}/mrtg-l.png"></a></td>
+<td WIDTH=25><a ALT=""
+    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
+BORDER=0 SRC="$config{icondir}/mrtg-m.png"></a></td>
+<td WIDTH=388><a ALT=""
+    HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
+BORDER=0 SRC="$config{icondir}/mrtg-r.png"></a></td>
+</tr>
+</table>
+<spacer TYPE=VERTICAL SIZE=4>
+<table BORDER=0 CELLSPACING=0 CELLPADDING=0 WIDTH=476>
+<tr VALIGN=top>
+<td ALIGN=LEFT><font FACE="Arial,Helvetica" SIZE=2>
+version 2.9.17</font></td>
+<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
+<a HREF="http://ee-staff.ethz.ch/~oetiker/">Tobias Oetiker</a>
+<a HREF="mailto:oetiker\@ee.ethz.ch">&lt;oetiker\@ee.ethz.ch&gt;</a>
+</font></td>
+</tr><tr>
+<td></td>
+<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
+<and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:dlr\@bungi.com">&lt;dlr\@bungi.com&gt;</a></font>
+</td>
+<tr VALIGN=top>
+<td ALIGN=LEFT><font FACE="Arial,Helvetica" SIZE=2>
+<A HREF=http://www.fi.muni.cz/~kas/mrtg-rrd/>mrtg-rrd.cgi version $version</A>
+</font></td>
+<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
+<A HREF="http://www.fi.muni.cz/~kas/">Jan "Yenya" Kasprzak</A>
+<A HREF="mailto:kas\@fi.muni.cz">&lt;kas\@fi.muni.cz&gt;</A>
+</font></td>
+</tr>
+</table>
+EOF
+
+}
+
+sub dump_targets() {
 	for my $tgt (keys %targets) {
 		print "Target $tgt:\n";
 		for my $opt (keys %{$targets{$tgt}}) {
@@ -673,10 +844,20 @@ sub dump_targets() {
 }
 
 sub dump_config() {
-
 	print "Config:\n";
 	for my $opt (keys %config) {
 		print $opt, ": ", $config{$opt}, "\n";
+	}
+}
+
+sub dump_directories {
+	print "Directories:\n";
+
+	for my $dir (keys %directories) {
+		print "Directory $dir:\n";
+		for my $item (@{$directories{$dir}}) {
+			print "\t$item\n";
+		}
 	}
 }
 
