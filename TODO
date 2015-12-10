@@ -1,4 +1,4 @@
-$Id: TODO,v 1.9 2003/03/14 13:42:09 kas Exp $
+$Id: TODO,v 1.13 2003/08/18 15:56:40 kas Exp $
 
 Unimplemented mrtg.cfg directives
 =================================
@@ -15,8 +15,6 @@ YTicsFactor: don't know how to tell this to rrdgraph
 Step: don't know what this should do
 Option:
 	growright: it is the default (don't know how to make growleft graphs)
-	noi: TODO
-	noo: TODO
 SetEnv: Makes sense only for Target[]. Not implemented.
 Weekformat: Dont know how to do this
 
@@ -33,6 +31,8 @@ The CGI speedup methods other than FastCGI (speedycgi?).
 Verify that it works on Windows (I have mixed reports both with
 	MS IIS and with Apache on Windows).
 
+Rewrite the config file parsing using MRTG_lib.pm.
+
 Known bugs
 ==========
 
@@ -40,13 +40,17 @@ Known bugs
 	graph unconditionally.
 * Directory mode does not generate the "WIDHT=" and "HEIGHT=" parameters
 	to the <IMG> tag.
-* kMG[]: <empty> is not implemented
 
 * Sometimes it displays 8-times bigger values than MRTG
 	(Options[target]: bits usually helps there). Probably it has something
 	to do with command-generated stats (Target[...]: `command`) and/or
 	stats converted to RRD format from earlier MRTG log databases.
-	Need to investigate this.
+
+	I was not able to reproduce this, but I have reports of this behaviour.
+	I tried to create a fresh mrtg.cfg file with "LogFormat: rrdtool"
+	and "Options: bits", and measure the traffic of some switch. Then the
+	mrtg-rrd.cgi generated the graphs and values which were in perfect
+	correspondence with the real world.
 
 * The Refresh: HTTP header sometimes confuses older browser - when this
 	header is added both to the main html file and to the image files,
@@ -55,4 +59,9 @@ Known bugs
 	this problem (Mozilla, Galeon and MSIE are fine). Since the Refresh:
 	header is not defined in the HTTP specification, there is no "correct"
 	way to solve this. So I'll leave this unfixed.
+
+* The config file parsing is still not 100% MRTG-compatible, mainly
+	with extensive use of [_], [$] and [^] in multiple config files.
+	The fix is to use MRTG_lib.pm directly, but I will do it post 0.7
+	release.
 

@@ -1,10 +1,10 @@
-# $Id: Makefile,v 1.6 2003/03/14 13:42:09 kas Exp $
+# $Id: Makefile,v 1.7 2003/08/18 15:58:57 kas Exp $
 
 FILES = COPYING FAQ TODO Makefile mrtg-rrd.cgi ChangeLog
 
 TARGETS = mrtg-rrd.fcgi
 
-VERSION = 0.6
+VERSION = 0.7
 
 all: $(TARGETS)
 

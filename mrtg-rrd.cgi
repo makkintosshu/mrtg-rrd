@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mrtg-rrd.cgi,v 1.23 2003/03/14 13:42:09 kas Exp $
+# $Id: mrtg-rrd.cgi,v 1.35 2003/08/18 15:58:57 kas Exp $
 #
 # mrtg-rrd.cgi: The script for generating graphs for MRTG statistics.
 #
@@ -28,8 +28,9 @@ use strict;
 use POSIX qw(strftime);
 use Time::Local;
 
-# Force 5.8.0 because of different handling of %.1f/%.1lf in sprintf() in 5.6.x
-require 5.8.0;
+# The %.1f should work on 5.005+. There may be other problems, though.
+# I've tested this on 5.8.0 only, so mind the gap!
+require 5.005;
 
 # Location of RRDs.pm, if it is not in @INC
 # use lib '/usr/lib/perl5/5.00503/i386-linux';
@@ -41,10 +42,14 @@ use vars qw(@config_files @all_config_files %targets $config_time
 # EDIT THIS to reflect all your MRTG config files
 BEGIN { @config_files = qw(/home/fadmin/mrtg/cfg/mrtg.cfg); }
 
-$version = '0.6';
+$version = '0.7';
 
 # This depends on what image format your libgd (and rrdtool) uses
 $imagetype = 'png'; # or make this 'gif';
+
+# strftime(3) compatibility test
+my $percent_h = '%-H';
+$percent_h = '%H' if (strftime('%-H', gmtime(0)) !~ /^\d+$/);
 
 sub handler ($)
 {
@@ -137,7 +142,7 @@ EOF
 		my @st = stat $tgt->{rrd};
 
 		print "<HR>\nThe statistics were last updated ",
-			strftime("<B>%A, %e %B, %T %Z</B>\n",
+			strftime("<B>%A, %d %B, %H:%M:%S %Z</B>\n",
 				localtime($st[9]));
 	}
 
@@ -152,29 +157,39 @@ EOF
 		print <<EOF;
 <HR>
 <table WIDTH=500 BORDER=0 CELLPADDING=4 CELLSPACING=0>
+EOF
+		print <<EOF unless ($tgt->{options}{noi});
     <tr>
 	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col1}">
 		<b>$tgt->{colname1} ###</b></font></td>
 	<td><font SIZE=-1>$tgt->{legend1}</font></td>
-    </tr><tr>
+    </tr>
+EOF
+		print <<EOF unless ($tgt->{options}{noo});
+    <tr>
 	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col2}">
 		<b>$tgt->{colname2} ###</b></font></td>
 	<td><font SIZE=-1>$tgt->{legend2}</font></td>
+    </tr>
 EOF
 		if ($tgt->{withpeak} ne '') {
-			print <<EOF;
-    </tr><tr>
+			print <<EOF unless ($tgt->{options}{noi});
+    <tr>
 	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col3}">
 		<b>$tgt->{colname3} ###</b></font></td>
 	<td><font SIZE=-1>$tgt->{legend3}</font></td>
-    </tr><tr>
+    </tr>
+EOF
+			print <<EOF unless ($tgt->{options}{noo});
+    <tr>
 	<td ALIGN=RIGHT><font SIZE=-1 COLOR="$tgt->{col4}">
 		<b>$tgt->{colname4} ###</b></font></td>
 	<td><font SIZE=-1>$tgt->{legend4}</font></td>
+    </tr>
 EOF
 		}
 		print <<EOF;
-    </tr> </table>
+    </table>
 EOF
 	}
 
@@ -195,12 +210,16 @@ sub html_comments($$@)
 
 	return if $#val == -1;
 
-	print "<!-- maxin $letter ", int $val[1], " -->\n";
-	print "<!-- maxout $letter ", int $val[3], " -->\n";
-	print "<!-- avin $letter ", int $val[5], " -->\n";
-	print "<!-- avout $letter ", int $val[0], " -->\n";
-	print "<!-- cuin $letter ", int $val[2], " -->\n";
-	print "<!-- cuout $letter ", int $val[4], " -->\n";
+	unless ($tgt->{options}{noi}) {
+		print "<!-- maxin $letter ", $val[1], " -->\n";
+		print "<!-- avin $letter ", $val[3], " -->\n";
+		print "<!-- cuin $letter ", $val[5], " -->\n";
+	}
+	unless ($tgt->{options}{noo}) {
+		print "<!-- maxout $letter ", $val[0], " -->\n";
+		print "<!-- avout $letter ", $val[2], " -->\n";
+		print "<!-- cuout $letter ", $val[4], " -->\n";
+	}
 }
 
 
@@ -232,9 +251,11 @@ sub html_graph($$$$$)
 
 	my @nv;
 	for my $val (@values) {
-		my @kmg1 = @kmg;
-
-		for my $si (@kmg1) {
+		if (@kmg == 0) { # kMG[target]: <empty>
+			push @nv, sprintf($fmt, $val);
+			next;
+		}
+		for my $si (@kmg) {
 			if ($val < 10000) {
 				push @nv, sprintf($fmt, $val) . " $si";
 				last;
@@ -250,7 +271,7 @@ sub html_graph($$$$$)
 		'" WIDTH=', $x, ' HEIGHT=', $y, ' ALT="', $freq,
 		' Graph" VSPACE=10 ALIGN=TOP><BR>', "\n";
 	print '<TABLE CELLPADDING=0 CELLSPACING=0>';
-	print <<EOF if $tgt->{legendi} ne '';
+	print <<EOF if $tgt->{legendi} ne '' && !$tgt->{options}{noi};
     <TR>
 	<TD ALIGN=RIGHT><SMALL>Max <FONT COLOR="$tgt->{col1}">$tgt->{legendi}</FONT></SMALL></TD>
 	<TD ALIGN=RIGHT><SMALL>&nbsp;$values[1]$tgt->{shortlegend}$percent[1]</SMALL></TD>
@@ -262,7 +283,7 @@ sub html_graph($$$$$)
 	<TD ALIGN=RIGHT><SMALL>&nbsp;$values[5]$tgt->{shortlegend}$percent[5]</SMALL></TD>
     </TR>
 EOF
-	print <<EOF if $tgt->{legendo} ne '';
+	print <<EOF if $tgt->{legendo} ne '' && !$tgt->{options}{noo};
     <TR>
 	<TD ALIGN=RIGHT><SMALL>Max <FONT COLOR="$tgt->{col2}">$tgt->{legendo}</FONT></SMALL></TD>
 	<TD ALIGN=RIGHT><SMALL>&nbsp;$values[0]$tgt->{shortlegend}$percent[0]</SMALL></TD>
@@ -365,6 +386,9 @@ sub do_image($$)
 	my $unscaled;
 	my $withpeak;
 
+	my $noi = 1 if $target->{options}{noi};
+	my $noo = 1 if $target->{options}{noo};
+
 	if ($ext eq 'day') {
 		$seconds = timelocal(@t);
 		$back = 30*3600;	# 30 hours
@@ -373,7 +397,7 @@ sub do_image($$)
 		$withpeak = 1 if $target->{withpeak} =~ /d/;
 		# We need this only for day graph. The other ones
 		# are magically correct.
-		$xgrid = 'HOUR:1:HOUR:6:HOUR:2:0:%-H';
+		$xgrid = 'HOUR:1:HOUR:6:HOUR:2:0:' . $percent_h;
 	} elsif ($ext eq 'week') {
 		$seconds = timelocal(@t);
 		$t[6] = ($t[6]+6) % 7;
@@ -415,8 +439,10 @@ sub do_image($$)
 	my @local_args_end;
 
 	if ($withpeak) {
-		push @local_args_end, 'LINE1:maxin'.$target->{col3}.':MaxIn',
-			'LINE1:maxout'.$target->{col4}.':MaxOut';
+		push @local_args_end, 'LINE1:maxin'.$target->{col3}.':MaxIn'
+			unless $noi;
+		push @local_args_end, 'LINE1:maxout'.$target->{col4}.':MaxOut'
+			unless $noo;
 	}
 
 	my @rv = RRDs::graph($file, '-s', "-$back", @local_args,
@@ -427,10 +453,25 @@ sub do_image($$)
 	print_error("RRDs::graph failed, $rrd_error") if defined $rrd_error;
 
 	# In array context just return the values
-	return @rv if wantarray;
+	if (wantarray) {
+		if (defined $target->{factor}) {
+			@{$rv[0]} = map { $_ * $target->{factor} } @{$rv[0]};
+		}
+		if ($noi) {
+			return ([$rv[0][0], 0, $rv[0][1], 0, $rv[0][2], 0],
+				$rv[1], $rv[2]);
+		} elsif ($noo) {
+			return ([0, $rv[0][0], 0, $rv[0][1], 0, $rv[0][2]],
+				$rv[1], $rv[2]);
+		} else {
+			return @rv;
+		}
+	}
 
 	# Not in array context ==> print out the PNG file.
 	open PNG, "<$file" or print_error("Can't open $file: $!");
+
+	binmode PNG;
 
 	http_headers("image/$imagetype", $target->{config});
 		
@@ -447,6 +488,9 @@ sub common_args($$$)
 	my ($name, $target, $q) = @_;
 
 	return @{$target->{args}} if defined @{$target->{args}};
+
+	my $noi = 1 if $target->{options}{noi};
+	my $noo = 1 if $target->{options}{noo};
 
 	$target->{name} = $name;
 
@@ -571,17 +615,21 @@ sub common_args($$$)
 	if ($scale > 1) {
 		push @args, "DEF:in0=$target->{rrd}:ds0:AVERAGE",
 			"CDEF:in=in0,$scale,*",
-			"DEF:out0=$target->{rrd}:ds1:AVERAGE",
-			"CDEF:out=out0,$scale,*",
 			"DEF:maxin0=$target->{rrd}:ds0:MAX",
-			"CDEF:maxin=maxin0,$scale,*",
+			"CDEF:maxin=maxin0,$scale,*"
+			unless $noi;
+		push @args, "DEF:out0=$target->{rrd}:ds1:AVERAGE",
+			"CDEF:out=out0,$scale,*",
 			"DEF:maxout0=$target->{rrd}:ds1:MAX",
-			"CDEF:maxout=maxout0,$scale,*";
+			"CDEF:maxout=maxout0,$scale,*"
+			unless $noo;
 	} else {
 		push @args, "DEF:in=$target->{rrd}:ds0:AVERAGE",
-			"DEF:out=$target->{rrd}:ds1:AVERAGE",
-			"DEF:maxin=$target->{rrd}:ds0:MAX",
-			"DEF:maxout=$target->{rrd}:ds1:MAX";
+			"DEF:maxin=$target->{rrd}:ds0:MAX"
+			unless $noi;
+		push @args, "DEF:out=$target->{rrd}:ds1:AVERAGE",
+			"DEF:maxout=$target->{rrd}:ds1:MAX"
+			unless $noo;
 	}
 
 	my $i=1;
@@ -595,11 +643,16 @@ sub common_args($$$)
 	push @args, '-v', $target->{ylegend};
 
 	push @args, 'AREA:in' . $target->{col1} . ':In',
-		'LINE2:out' . $target->{col2} . ':Out';
+		unless $noi;
+	push @args, 'LINE2:out' . $target->{col2} . ':Out'
+		unless $noo;
 
-	push @args, 'PRINT:out:MAX:%.1lf', 'PRINT:in:MAX:%.1lf',
-		'PRINT:out:AVERAGE:%.1lf', 'PRINT:in:AVERAGE:%.1lf',
-		'PRINT:out:LAST:%.1lf', 'PRINT:in:LAST:%.1lf';
+	push @args, 'PRINT:out:MAX:%.1lf' unless $noo;
+	push @args, 'PRINT:in:MAX:%.1lf'  unless $noi;
+	push @args, 'PRINT:out:AVERAGE:%.1lf' unless $noo;
+	push @args, 'PRINT:in:AVERAGE:%.1lf'  unless $noi;
+	push @args, 'PRINT:out:LAST:%.1lf' unless $noo;
+	push @args, 'PRINT:in:LAST:%.1lf'  unless $noi;
 
 	if (defined $target->{maxbytes1}) {
 		$target->{maxbytes1} *= $scale;
@@ -733,6 +786,7 @@ sub read_mrtg_config($$$$)
 				delete $targets{$tgt}{options};
 				# The same as above - we need to create this
 				# based on [^], [_], and [$] values
+				%{$targets{$tgt}{options}} = ();
 				%{$targets{$tgt}{options}} = %{$targets{'^'}{options}}
 					if defined $targets{'^'}{options};
 				%{$targets{$tgt}{options}} = (%{$targets{$tgt}{options}},
@@ -931,7 +985,7 @@ and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:
 </tr>
 </table>
 EOF
-	print '<!--$Id: mrtg-rrd.cgi,v 1.23 2003/03/14 13:42:09 kas Exp $-->', "\n";
+	print '<!--$Id: mrtg-rrd.cgi,v 1.35 2003/08/18 15:58:57 kas Exp $-->', "\n";
 }
 
 sub dump_targets() {
@@ -974,6 +1028,13 @@ sub print_error(@)
 use CGI;
 my $q = new CGI;
 
+# thttpd fix up by Akihiro Sagawa
+if ($q->server_software() =~ m|^thttpd/|) {
+	my $path = $q->path_info();
+	$path .= '/' if ($q->script_name=~ m|/$|);
+	$q->path_info($path);
+}
+
 handler($q);
 
 #--END CGI--
@@ -986,6 +1047,14 @@ handler($q);
 #-# 
 #-# while ($req->Accept >= 0) {
 #-# 	my $q = new CGI;
+#-# 
+#-# 	# thttpd fix up by Akihiro Sagawa
+#-# 	if ($q->server_software() =~ m|^thttpd/|) {
+#-# 		my $path = $q->path_info();
+#-# 		$path .= '/' if ($q->script_name=~ m|/$|);
+#-# 		$q->path_info($path);
+#-# 	}
+#-# 
 #-# 	handler($q);
 #-# }
 #--END FCGI--

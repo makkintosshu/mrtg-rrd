@@ -1,4 +1,41 @@
-$Id: ChangeLog,v 1.17 2003/03/14 13:42:09 kas Exp $
+$Id: ChangeLog,v 1.28 2003/08/18 15:58:57 kas Exp $
+
+==================================================================
+RELEASE 0.7
+
+* Mon Aug 18 16:13:16 CEST 2003
+	The "Factor[target]: value" directive implemented. Suggested by
+	Adam Denenberg and others, but I've changed this to modify only numbers
+	below graphs, not the graphs itself - it is documented in MRTG
+	reference(1) manual page to work this way.
+
+	binmode fix for the PNG file as suggested by Paul Rathbone.
+
+	require 5.005 (it should work there, but not tested!)
+
+	thttpd fix by Akihiro Sagawa.
+
+	strftime() now uses only ANSI C standard format string directives.
+
+* Wed Aug 13 16:08:45 CEST 2003
+	Work on noi/noo options based on the implementation by Tobias Gruetzmacher.
+
+* Wed Aug 13 15:46:03 CEST 2003
+	The kMG[]: <empty> now implemented. Fix suggested by Tobias Gruetzmacher,
+	I've modified this slightly.
+
+* Fri Aug  1 17:19:12 CEST 2003
+	The automatic compatibility test for strftime("%-H"), which does not work
+	on some platforms (e.g. Solaris). The "%H" format string is used instead
+	in that case.
+
+* Sun Mar 23 18:06:48 CET 2003
+	Make the version string in "require" portable (5.008 instead of 5.8.0).
+	Fix suggested by Haroon Rafique.
+
+* Mon Mar 17 14:48:31 CET 2003
+	Fixed the undefined variable error when Options[_] was set.
+	Reported by Mark Pelillo, thanks!
 
 ==================================================================
 RELEASE 0.6
