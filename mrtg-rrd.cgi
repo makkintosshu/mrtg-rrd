@@ -728,11 +728,11 @@ sub try_read_config($)
 		read_mrtg_config($cfgfile, \%defaults, $cfgref, \$order);
 	}
 
+	parse_directories();
+	
 	delete $targets{'^'};
 	delete $targets{_};
 	delete $targets{'$'};
-
-	parse_directories();
 
 	$config_time = time;
 }
@@ -852,6 +852,8 @@ sub parse_directories {
 
 	# FIXME: the sort is expensive
 	for my $name (sort { $targets{$a}{order} <=> $targets{$b}{order} } keys %targets) {
+		next if $name =~ /^[\$\^_]$/;
+		
 		my $dir = $targets{$name}{directory}
 			if defined $targets{$name}{directory};
 		$dir = '' unless defined $dir;
@@ -869,6 +871,9 @@ sub parse_directories {
 					$targets{$name}{config};
 				$directories{$prefix}{bodytag} =
 					$targets{$name}{bodytag};
+				$directories{$prefix}{addhead} = $targets{_}{addhead};
+				$directories{$prefix}{pagetop} = $targets{_}{pagetop};
+				$directories{$prefix}{pagefoot} = $targets{_}{pagefoot};
 			}
 			$prefix .= $component . '/';
 		}
@@ -877,6 +882,9 @@ sub parse_directories {
 				$targets{$name}{config};
 			$directories{$dir}{bodytag} =
 				$targets{$name}{bodytag};
+			$directories{$dir}{addhead} = $targets{_}{addhead};
+			$directories{$dir}{pagetop} = $targets{_}{pagetop};
+			$directories{$dir}{pagefoot} = $targets{_}{pagefoot};
 		}
 
 		push (@{$directories{$dir}{target}}, $name);
@@ -894,9 +902,12 @@ sub print_dir($) {
 <HTML>
 <HEAD>
 <TITLE>MRTG: Directory $dir1</TITLE>
-</HEAD>
 EOF
-	print $directories{$dir}{bodytag};
+	print $directories{$dir}{addhead} if defined $directories{$dir}{addhead};
+	
+	print "</HEAD>\n", $directories{$dir}{bodytag};
+	
+	print $directories{$dir}{pagetop} if defined $directories{$dir}{pagetop};
 
 	my $subdirs_printed;
 	if (defined @{$directories{$dir}{subdir}}) {
@@ -938,6 +949,9 @@ EOF
 	}
 
 	print_banner($directories{$dir}{config});
+
+	print $directories{$dir}{pagefoot} if defined $directories{$dir}{pagefoot};
+
 	print "</BODY>\n</HTML>\n";
 }
 
