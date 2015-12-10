@@ -1,0 +1,40 @@
+$Id: TODO,v 1.1 2001/12/17 15:06:37 kas Exp $
+
+Unimplemented mrtg.cfg directives
+=================================
+
+Htmldir: (it is determined by the .cgi location); no static HTML is generated
+NoMib2: (and displaying system uptime) I don't want to query routers from
+	the CGI.
+Language: TODO
+Libadd: (handled separately) Don't want to mess with more BEGIN{} statements.
+RouterUptime: I don't want to query the routers from the CGI.
+Unscaled: don't know how to tell this to rrdgraph
+WithPeak: don't know how to tell this to rrdgraph
+Extension: (has no meaning)
+Directory: (partly implemented - reads the directive, but it is not visible in URL)
+XZoom: don't know how to tell this to rrdgraph
+YZoom: don't know how to tell this to rrdgraph
+YTics: don't know how to tell this to rrdgraph
+YTicsFactor: don't know how to tell this to rrdgraph
+Step: don't know what this should do
+Option:
+	growright: it is the default (don't know how to make growleft grapsh)
+	noi: TODO
+	noo: TODO
+SetEnv: Makes sense only for Target[]. Not implemented.
+Weekformat: Dont know how to do this
+
+
+Other TODO/missing items
+========================
+
+Option for setting the image format (PNG/GIF).
+
+Directory/all graphs listing.
+
+Exact time of the previous VRULE (for month and year graphs).
+
+The MRTG-like legend on the X axis of the daily graph (every 2nd hour
+	instead of every 6th our and ":00" appended).
+

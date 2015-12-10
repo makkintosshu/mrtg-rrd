@@ -1,0 +1,71 @@
+$Id: FAQ,v 1.3 2001/12/17 17:30:36 kas Exp $
+
+Q: What is this?
+A: The mrtg-rrd.cgi scripts is a replacement for the 14all.cgi script
+	distributed in the MRTG contrib directory. It is the script
+	which can generate on-the-fly HTML output and graph images
+	from the MRTG statistics.
+
+Q: Why not let MRTG to generate the graphs?
+A: It is much slower to generate thousands of graphs every 5 minutes instead
+	of generating them only when somebody is looking at them. This
+	script (mrtg-rrd.cgi) uses the '--lazy' option of RRDtool, so images
+	are generated only every 5 minutes even if somebody is looking at
+	the statistics more frequently.
+
+Q: Do I need an additional software?
+A: You need the MRTG itself, and the RRDtool (see the
+	http://people.ee.ethz.ch/~oetiker/webtools/mrtg/ and
+	http://people.ee.ethz.ch/~oetiker/webtools/rrdtool/ directories).
+
+Q: How to use this?
+A: Just put the mrtg-rrd.cgi somewhere into your WWW tree, where the CGI
+	scripts can be executed (such as /var/www/cgi-bin/ directory),
+	and edit the line which says "BEGIN { @config_files = <something>}"
+	to reflect all your MRTG config files (yes it can handle multiple
+	config files as long as the target names are unique). Make sure
+	the ImageDir (or the default WorkDir) is set to a directory writable
+	by the HTTP server.
+
+Q: How to get the actual output?
+A: Point your browser to the http://your.server/cgi-bin/mrtg-rrd.cgi/ezwf.html
+	(no question marks or ampesands here; just add the slash after the
+	CGI name, then your resource name -- ezwf here -- and a ".html"
+	extension). 
+
+Q1: It is slow. How can I speed it up?
+Q2: I want to use FastCGI/mod_perl/Apache::Registry. I don't want to use CGI.
+A:  The mrtg-rrd.cgi is written in a mod_perl friendly way. It can be
+	run as a FastCGI, mod_perl or Apache::Registry. The script itself
+	tries to precompute everything once (i.e. the parsing of mrtg.cfg)
+	and then only perform the actual computations. If you want to run it
+	under a different environment than CGI, just create the $q object
+	with the path_info() method, and then call a handler($q) subroutine
+	(see the bottom of the script for an example).
+
+Q: Can it fully emulate the MRTG behaviour?
+A: No, but it understands a very large subset of MRTG directives. See the
+	file TODO for the list of unimplemented directives. Everything
+	else (described in the MRTG reference.1 manpage) should be
+	implemented. You are welcome to contribute any improvements.
+
+Q: Why to develop another 14all.cgi?
+A: This script tries to produce its output as much similar to the original
+	MRTG output as possible. It also implements (I believe) much bigger
+	subset of MRTG configuration directives than 14all.cgi. On the other
+	hand, it doesn't do the directory index files (yet).
+
+Q: Where can I find the newest version?
+A: Look at http://www.fi.muni.cz/~kas/mrtg-rrd/ - this is the project home
+	page. You can also look at the FTP directory -
+	ftp://ftp.linux.cz/pub/linux/people/jan_kasprzak/mrtg-rrd/
+
+Q: Can I modify this script?
+A: Yes, it is distributed under the terms of GNU GPL. However, if you fix
+	a bug in this script, please consider contributing the fix back
+	to the author (use the "diff -u" command for generating patch).
+
+Q: Who is the author?
+A: This script was written by Jan "Yenya" Kasprzak <kas@fi.muni.cz>.
+	See http://www.fi.muni.cz/~kas/ page for details and other projects.
+
