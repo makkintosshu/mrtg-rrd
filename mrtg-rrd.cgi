@@ -8,6 +8,7 @@
 # 14all.cgi
 #
 #   Copyright (C) 2001 Jan "Yenya" Kasprzak <kas@fi.muni.cz>
+#   Copyright (C) 2009 Morgan Aldridge <morgant@makkintosshu.com>
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -42,7 +43,7 @@ use vars qw(@config_files @all_config_files %targets $config_time
 # EDIT THIS to reflect all your MRTG config files
 BEGIN { @config_files = qw(/home/fadmin/mrtg/cfg/mrtg.cfg); }
 
-$version = '0.7';
+$version = '0.7.1';
 
 # This depends on what image format your libgd (and rrdtool) uses
 $imagetype = 'png'; # or make this 'gif';
@@ -996,6 +997,11 @@ and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:
 <A HREF="http://www.fi.muni.cz/~kas/">Jan "Yenya" Kasprzak</A>
 <A HREF="mailto:kas\@fi.muni.cz">&lt;kas\@fi.muni.cz&gt;</A>
 </font></td>
+</tr><tr>
+<td></td>
+<td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
+and&nbsp;<a HREF="http://www.makkintosshu.com/">Morgan&nbsp;Aldridge</a>&nbsp;<a HREF="mailto:morgant\@makkintosshu.com">&lt;morgant\@makkintosshu.com&gt;</a></font>
+</td>
 </tr>
 </table>
 EOF
