@@ -1,4 +1,4 @@
-$Id: FAQ,v 1.7 2002/01/16 10:17:52 kas Exp $
+$Id: FAQ,v 1.8 2003/03/14 13:42:09 kas Exp $
 
 Q: What is this?
 A: The mrtg-rrd.cgi scripts is a replacement for the 14all.cgi script
@@ -25,7 +25,8 @@ A: Just put the mrtg-rrd.cgi somewhere into your WWW tree, where the CGI
 	to reflect all your MRTG config files (yes it can handle multiple
 	config files as long as the target names are unique). Make sure
 	the ImageDir (or the default WorkDir) is set to a directory writable
-	by the HTTP server.
+	by the HTTP server. You may want to edit the "use lib ..." line as well,
+	if your RRDs.pm is not located in the @INC (the default Perl search path).
 
 Q: How to get the actual output?
 A: Point your browser to the http://your.server/cgi-bin/mrtg-rrd.cgi/ezwf.html
@@ -35,7 +36,7 @@ A: Point your browser to the http://your.server/cgi-bin/mrtg-rrd.cgi/ezwf.html
 
 Q: It does not work. What should I do?
 A: The author is willing to help you in his spare time, but you must give
-	as more information as you can (error messages, maybe HTML files
+	as much information as you can (error messages, maybe HTML files
 	it outputs, etc). Please state clearly what are you doing and when
 	and how the mrtg-rrd behaviour starts to differ from what you
 	are expecting.

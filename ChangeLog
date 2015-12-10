@@ -1,4 +1,46 @@
-$Id: ChangeLog,v 1.11 2002/02/25 15:09:04 kas Exp $
+$Id: ChangeLog,v 1.17 2003/03/14 13:42:09 kas Exp $
+
+==================================================================
+RELEASE 0.6
+
+* Fri Mar 14 14:39:16 CET 2003
+	Bumped the version number to 0.6.
+	Fixed some spelling mistakes in FAQ and TODO.
+	More known bugs/mis-features added to TODO.
+
+* Wed Mar 12 17:05:53 CET 2003
+	Fixed the hard-coded "5 Minute" legend in the daly graph
+		(in fact it should be based on the Interval: setting).
+		Thanks to Vincent Aniello for reporting this.
+	The Interval: parameter is in minutes, not in seconds
+		(as opposed from the Refresh: parameter).
+	Requires Perl 5.8.0 because of the sprintf() handling.
+	Accepts tabs and other whitespace characters at the beginning of
+		line, and before and after the ":" sign in the directive.
+	Reworked handling of [^], [_], and [$] - now it uses [_]
+		when no [target] is set and all of [^], [_] and [$] is set,
+		and [^][target][$] otherwise.
+		Bug reported by Alejandro Marco.
+	Reworked handling of Options[^], [_], and [$]. When no Options[target]
+		is set, all of Options[^], [_], and [$] apply. When Options[target]
+		is set, the Options[^], Options[target], and Options[$] apply.
+		I've try to verify this against MRTG, but its handling of
+		these cases seems to be a bit erratic. Sent a question to the
+		mrtg list, we'll se what reply I get.
+	Added $imagetype configuration variable so that GIF images can be
+		used instead of PNG.
+
+* Wed Oct 30 14:08:46 CET 2002
+	Fixed the "%.1lf" format string (does not work on 5.8.0).
+
+* Wed Apr 14 18:51:52 CEST 2002
+	Fixed the shallow copy of the [_] default values of the "options" hash.
+	Fix by Daniel Drown.
+
+* Wed Apr 10 14:24:06 CEST 2002
+	The X axis labels on the -day graph looks similar to the original
+	MRTG (i.e., labels every 2 hours instead of every 6th hour).
+	Suggested by Glen Gold.
 
 * Mon Feb 25 16:08:18 CET 2002
 	Fixed the ugly bug with Refresh handling in leaf subdirectories.

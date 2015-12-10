@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mrtg-rrd.cgi,v 1.17 2002/02/25 15:09:04 kas Exp $
+# $Id: mrtg-rrd.cgi,v 1.23 2003/03/14 13:42:09 kas Exp $
 #
 # mrtg-rrd.cgi: The script for generating graphs for MRTG statistics.
 #
@@ -28,18 +28,23 @@ use strict;
 use POSIX qw(strftime);
 use Time::Local;
 
+# Force 5.8.0 because of different handling of %.1f/%.1lf in sprintf() in 5.6.x
+require 5.8.0;
+
 # Location of RRDs.pm, if it is not in @INC
-use lib '/usr/lib/perl5/5.00503/i386-linux';
+# use lib '/usr/lib/perl5/5.00503/i386-linux';
 use RRDs;
 
 use vars qw(@config_files @all_config_files %targets $config_time
-	%directories $version);
+	%directories $version $imagetype);
 
 # EDIT THIS to reflect all your MRTG config files
-BEGIN { @config_files = qw(/home/fadmin/mrtg/cfg/mrtg.cfg
-	/www/html/auth/kas/mrtg.cfg); }
+BEGIN { @config_files = qw(/home/fadmin/mrtg/cfg/mrtg.cfg); }
 
-$version = '0.5';
+$version = '0.6';
+
+# This depends on what image format your libgd (and rrdtool) uses
+$imagetype = 'png'; # or make this 'gif';
 
 sub handler ($)
 {
@@ -60,7 +65,7 @@ sub handler ($)
 	}
 
 	my ($dir, $stat, $ext) = ($q->path_info() =~
-		/^(.*)\/([^\/]+)(\.html|-(day|week|month|year)\.png)$/);
+		/^(.*)\/([^\/]+)(\.html|-(day|week|month|year)\.$imagetype)$/);
 
 	$dir =~ s/^\///;
 
@@ -84,13 +89,13 @@ sub handler ($)
 
 	if ($ext eq '.html') {
 		do_html($tgt);
-	} elsif ($ext eq '-day.png') {
+	} elsif ($ext eq '-day.' . $imagetype) {
 		do_image($tgt, 'day');
-	} elsif ($ext eq '-week.png') {
+	} elsif ($ext eq '-week.' . $imagetype) {
 		do_image($tgt, 'week');
-	} elsif ($ext eq '-month.png') {
+	} elsif ($ext eq '-month.' . $imagetype) {
 		do_image($tgt, 'month');
-	} elsif ($ext eq '-year.png') {
+	} elsif ($ext eq '-year.' . $imagetype) {
 		do_image($tgt, 'year');
 	} else {
 		print_error("Unknown extension");
@@ -136,7 +141,9 @@ EOF
 				localtime($st[9]));
 	}
 
-	html_graph($tgt, 'day', 'Daily', '5 Minute', \@day);
+	my $dayavg = $tgt->{config}->{interval};
+
+	html_graph($tgt, 'day', 'Daily', $dayavg . ' Minute', \@day);
 	html_graph($tgt, 'week', 'Weekly', '30 Minute', \@week);
 	html_graph($tgt, 'month', 'Monthly', '2 Hour', \@month);
 	html_graph($tgt, 'year', 'Yearly', '1 Day', \@year);
@@ -217,7 +224,7 @@ sub html_graph($$$$$)
 	if (defined $tgt->{options}{integer}) {
 		$fmt = '%d';
 	} else {
-		$fmt = '%.1lf';
+		$fmt = '%.1f';
 	}
 
 	my @percent = do_percent($tgt, \@values);
@@ -239,8 +246,8 @@ sub html_graph($$$$$)
 
 	print "<HR>\n<B>\`$freq\' Graph ($period Average)</B><BR>\n";
 
-	print '<IMG SRC="', $tgt->{url}, '-', $ext, '.png" WIDTH=', $x,
-		' HEIGHT=', $y, ' ALT="', $freq,
+	print '<IMG SRC="', $tgt->{url}, '-', $ext, '.' . $imagetype .
+		'" WIDTH=', $x, ' HEIGHT=', $y, ' ALT="', $freq,
 		' Graph" VSPACE=10 ALIGN=TOP><BR>', "\n";
 	print '<TABLE CELLPADDING=0 CELLSPACING=0>';
 	print <<EOF if $tgt->{legendi} ne '';
@@ -333,7 +340,7 @@ Pragma: no-cache
 EOF
 	# Expires header calculation stolen from CGI.pm
 	print strftime("Expires: %a, %d %b %Y %H:%M:%S GMT\n",
-		gmtime(time+$cfg->{interval}));
+		gmtime(time+60*$cfg->{interval}));
 
 	print "\n";
 }
@@ -353,6 +360,7 @@ sub do_image($$)
 	my $seconds;
 	my $oldsec;
 	my $back;
+	my $xgrid;
 
 	my $unscaled;
 	my $withpeak;
@@ -363,6 +371,9 @@ sub do_image($$)
 		$oldsec = $seconds - 86400;
 		$unscaled = 1 if $target->{unscaled} =~ /d/;
 		$withpeak = 1 if $target->{withpeak} =~ /d/;
+		# We need this only for day graph. The other ones
+		# are magically correct.
+		$xgrid = 'HOUR:1:HOUR:6:HOUR:2:0:%-H';
 	} elsif ($ext eq 'week') {
 		$seconds = timelocal(@t);
 		$t[6] = ($t[6]+6) % 7;
@@ -397,6 +408,10 @@ sub do_image($$)
 		push @local_args, '--rigid' unless defined $target->{absmax};
 	}
 
+	if ($xgrid) {
+		push @local_args, '-x', $xgrid;
+	}
+
 	my @local_args_end;
 
 	if ($withpeak) {
@@ -417,7 +432,7 @@ sub do_image($$)
 	# Not in array context ==> print out the PNG file.
 	open PNG, "<$file" or print_error("Can't open $file: $!");
 
-	http_headers('image/png', $target->{config});
+	http_headers("image/$imagetype", $target->{config});
 		
 	my $buf;
         # could be sendfile in Linux ;-)
@@ -462,13 +477,13 @@ sub common_args($$$)
 	$target->{suppress} ||= '';
 
 	$target->{day}   = $dir . '/' . $tdir . $name
-		. '-day.png' unless $target->{suppress} =~ /d/;
+		. '-day.' . $imagetype unless $target->{suppress} =~ /d/;
 	$target->{week}  = $dir . '/' . $tdir . $name
-		. '-week.png' unless $target->{suppress} =~ /w/;
+		. '-week.' . $imagetype unless $target->{suppress} =~ /w/;
 	$target->{month} = $dir . '/' . $tdir . $name
-		. '-month.png' unless $target->{suppress} =~ /m/;
+		. '-month.' . $imagetype unless $target->{suppress} =~ /m/;
 	$target->{year}  = $dir . '/' . $tdir . $name
-		. '-year.png' unless $target->{suppress} =~ /y/;
+		. '-year.' . $imagetype unless $target->{suppress} =~ /y/;
 
 	$target->{maxbytes1} = $target->{maxbytes}
 		if defined $target->{maxbytes} && !defined $target->{maxbytes1};
@@ -653,7 +668,7 @@ sub try_read_config($)
 
 		my $cfgref = {
 			refresh => 300,
-			interval => 300,
+			interval => 5,
 			icondir => $prefix
 		};
 
@@ -695,15 +710,43 @@ sub read_mrtg_config($$$$)
 	close CFG;
 
 	foreach (@lines) {
-		if (/^([\w\d]+)\[(\S+)\] *: *(.*)$/) {
+		if (/^\s*([\w\d]+)\[(\S+)\]\s*:\s*(.*)$/) {
 			my ($tgt, $opt, $val) = (lc($2), lc($1), $3);
 			unless (exists $targets{$tgt}) {
-				%{$targets{$tgt}} = %{$targets{_}};
+				# pre-set defaults constructed on all of ^, _, and $
+				for my $key (%{$targets{'^'}}) {
+					$targets{$tgt}{$key} = $targets{'^'}{$key};
+				}
+				for my $key (%{$targets{'$'}}) {
+					$targets{$tgt}{$key} .= $targets{'$'}{$key};
+				}
+				# WARNING: Tobi explicitly said that when all ^, _, and $
+				# options are set, the result should be just the value
+				# of the _ option (when the option itself is not explicitly
+				# defined. I do not agree with him here but I respect this
+				# and will try to be compatible with MRTG.
+				for my $key (%{$targets{'_'}}) {
+					$targets{$tgt}{$key} = $targets{'_'}{$key};
+				}
+
+				# anonymous hash ref - need copy, not ref
+				delete $targets{$tgt}{options};
+				# The same as above - we need to create this
+				# based on [^], [_], and [$] values
+				%{$targets{$tgt}{options}} = %{$targets{'^'}{options}}
+					if defined $targets{'^'}{options};
+				%{$targets{$tgt}{options}} = (%{$targets{$tgt}{options}},
+					%{$targets{'_'}{options}})
+					if defined $targets{'_'}{options};
+				%{$targets{$tgt}{options}} = (%{$targets{$tgt}{options}},
+					%{$targets{'$'}{options}})
+					if defined $targets{'$'}{options};
+
 				$targets{$tgt}{order} = ++$$order;
 				$targets{$tgt}{config} = $cfgref;
 			}
 			if ($tgt eq '_' && $val eq '') {
-				if ($defaults{$opt}) {
+				if (defined $defaults{$opt}) {
 					$targets{_}{$opt} = $defaults{$opt};
 				} else {
 					delete $targets{_}{$opt};
@@ -711,8 +754,15 @@ sub read_mrtg_config($$$$)
 			} elsif (($tgt eq '^' || $tgt eq '$') && $val eq '') {
 				delete $targets{$tgt}{$opt};
 			} elsif ($opt eq 'options') {
+				# Do not forget defaults [^] and [$]
+				delete $targets{$tgt}{options};
+				%{$targets{$tgt}{options}} = %{$targets{'^'}{options}}
+					if defined $targets{'^'}{options};
 				$val = lc($val);
 				map { $targets{$tgt}{options}{$_} = 1 } ($val =~ m/([a-z]+)/g);
+				%{$targets{$tgt}{options}} = (%{$targets{$tgt}{options}},
+					%{$targets{'$'}{options}})
+					if defined $targets{'$'}{options};
 			} else {
 				my $pre = $targets{'^'}{$opt}
 					if defined $targets{'^'}{$opt};
@@ -722,11 +772,11 @@ sub read_mrtg_config($$$$)
 					if defined $targets{'$'}{$opt};
 			}
 			next;
-		} elsif (/^Include *: *(\S*)$/) {
+		} elsif (/^Include\s*:\s*(\S*)$/) {
 			push @all_config_files, $1;
 			read_mrtg_config($1, $def, $cfgref, $order);
 			next;
-		} elsif (/^([\w\d]+) *: *(\S.*)$/) {
+		} elsif (/^([\w\d]+)\s*:\s*(\S.*)$/) {
 			my ($opt, $val) = (lc($1), $2);
 			$cfgref->{$opt} = $val;
 			next;
@@ -823,7 +873,7 @@ EOF
 			print "    <TR>\n" unless $odd;
 			print <<EOF;
    <TD><A HREF="$item.html">$itemname<BR>
-	<IMG SRC="$item-day.png" BORDER=0 ALIGN=TOP VSPACE=10 ALT="$item">
+	<IMG SRC="$item-day.$imagetype" BORDER=0 ALIGN=TOP VSPACE=10 ALT="$item">
 	</A><BR CLEAR=ALL>
    </TD>
 EOF
@@ -847,13 +897,13 @@ sub print_banner($) {
 <tr>
 <td WIDTH=63><a ALT="MRTG"
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$cfg->{icondir}/mrtg-l.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-l.$imagetype"></a></td>
 <td WIDTH=25><a ALT=""
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$cfg->{icondir}/mrtg-m.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-m.$imagetype"></a></td>
 <td WIDTH=388><a ALT=""
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$cfg->{icondir}/mrtg-r.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-r.$imagetype"></a></td>
 </tr>
 </table>
 <spacer TYPE=VERTICAL SIZE=4>
@@ -881,7 +931,7 @@ and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:
 </tr>
 </table>
 EOF
-	print '<!--$Id: mrtg-rrd.cgi,v 1.17 2002/02/25 15:09:04 kas Exp $-->', "\n";
+	print '<!--$Id: mrtg-rrd.cgi,v 1.23 2003/03/14 13:42:09 kas Exp $-->', "\n";
 }
 
 sub dump_targets() {

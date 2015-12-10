@@ -1,4 +1,4 @@
-$Id: TODO,v 1.6 2002/01/09 16:32:30 kas Exp $
+$Id: TODO,v 1.9 2003/03/14 13:42:09 kas Exp $
 
 Unimplemented mrtg.cfg directives
 =================================
@@ -24,19 +24,14 @@ Weekformat: Dont know how to do this
 Other TODO/missing items
 ========================
 
-Option for setting the image format (PNG/GIF).
-
 More customizable directory listing.
 
 Exact time of the previous VRULE (for month and year graphs).
 
-The MRTG-like legend on the X axis of the daily graph (every 2nd hour
-	instead of every 6th our and ":00" appended).
-
-Two-columned directory index? Suggested by Peter Banfi.
-
 The CGI speedup methods other than FastCGI (speedycgi?).
 
+Verify that it works on Windows (I have mixed reports both with
+	MS IIS and with Apache on Windows).
 
 Known bugs
 ==========
@@ -46,3 +41,18 @@ Known bugs
 * Directory mode does not generate the "WIDHT=" and "HEIGHT=" parameters
 	to the <IMG> tag.
 * kMG[]: <empty> is not implemented
+
+* Sometimes it displays 8-times bigger values than MRTG
+	(Options[target]: bits usually helps there). Probably it has something
+	to do with command-generated stats (Target[...]: `command`) and/or
+	stats converted to RRD format from earlier MRTG log databases.
+	Need to investigate this.
+
+* The Refresh: HTTP header sometimes confuses older browser - when this
+	header is added both to the main html file and to the image files,
+	the browser sometimes redirects itself to the image URL instead of
+	the main HTML page. Netscape 4 and Opera 5 and 6 are reported to have
+	this problem (Mozilla, Galeon and MSIE are fine). Since the Refresh:
+	header is not defined in the HTTP specification, there is no "correct"
+	way to solve this. So I'll leave this unfixed.
+
