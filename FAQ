@@ -1,4 +1,4 @@
-$Id: FAQ,v 1.6 2002/01/09 16:32:30 kas Exp $
+$Id: FAQ,v 1.7 2002/01/16 10:17:52 kas Exp $
 
 Q: What is this?
 A: The mrtg-rrd.cgi scripts is a replacement for the 14all.cgi script
@@ -55,6 +55,27 @@ A: The mrtg-rrd (i.e. the HTTP server under which it runs) need the write
 	(it does not need to be visible inside the WWW tree) and make this
 	directory writable either by user or group under which the HTTP server
 	runs.
+
+Q: On which systems mrtg-rrd runs?
+A: I have developed it and tested under Linux, but it should run under any
+	system with Perl and RRDtool, whose HTTP server understands CGI
+	with PATH_INFO. It has been reported to run under Solaris and even
+	Micros~1 Windows with IIS.
+
+Q: I have problem running it on MS IIS. What should I do?
+A: Anders Fosgerau wrote:
+	: Actually I almost got IIS to work. The trick is first the one that you
+	: referred to. In short the solution is to:
+	: 
+	:   cd %SystemRoot%\inetsrv\adminsamples
+	:   adsutil.vbs SET W3SVC/AllowPathInfoforScriptMappings 
+	: 
+	:   (reference:
+	: http://www.mstm.okstate.edu/students/jrbattles/docs/nt/perloniis.htm)
+	: 
+	: The next trick is to disable the "check that file exists" checkbox
+	: under the IIS CGI application configuration (reference:
+	: http://jmarshall.com/tools/cgiproxy/faq.html#q5)
 
 Q1: It is slow. How can I speed it up?
 Q2: I want to use FastCGI/mod_perl/Apache::Registry. I don't want to use CGI.

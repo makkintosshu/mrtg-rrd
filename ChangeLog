@@ -1,4 +1,32 @@
-$Id: ChangeLog,v 1.6 2002/01/09 16:32:30 kas Exp $
+$Id: ChangeLog,v 1.11 2002/02/25 15:09:04 kas Exp $
+
+* Mon Feb 25 16:08:18 CET 2002
+	Fixed the ugly bug with Refresh handling in leaf subdirectories.
+
+===================================================================
+RELEASE 0.5
+
+* Thu Feb 21 19:02:40 CET 2002
+	Spelling fixes by Evans O'Shaughnessy.
+	Multilple config files now works even with different WorkDirs etc.
+	The parameters (such as IconDir or Refresh) for the directory
+	is taken from the global configuration directives of the first target
+	in the particular sub-tree.
+	Bumped the version number to 0.5.
+
+* Thu Feb  7 20:36:57 CET 2002
+	Incorrect handling of Suppress[]: d (reported by Luc Ducazu).
+
+* Wed Jan 16 09:16:47 CET 2002
+	Moved mis-placed call to http_headers() after the opening of the
+		PNG file.
+	Added FAQ entry about CGI with PATH_INFO in IIS.
+	Added FAQ entry about operating systems compatibility.
+
+* Fri Jan 11 13:48:34 CET 2002
+	Changed the non-portable strftime("%s", @t) to timelocal(@t)
+		(the timelocal() is in the Time::Local module). This
+		non-portability has been reported by Takuya Mori.
 
 
 ===================================================================

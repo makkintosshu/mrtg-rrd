@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mrtg-rrd.cgi,v 1.12 2002/01/09 17:31:55 kas Exp $
+# $Id: mrtg-rrd.cgi,v 1.17 2002/02/25 15:09:04 kas Exp $
 #
 # mrtg-rrd.cgi: The script for generating graphs for MRTG statistics.
 #
@@ -26,18 +26,20 @@
 use strict;
 
 use POSIX qw(strftime);
+use Time::Local;
 
 # Location of RRDs.pm, if it is not in @INC
 use lib '/usr/lib/perl5/5.00503/i386-linux';
 use RRDs;
 
-use vars qw(@config_files @all_config_files %targets %config $config_time
+use vars qw(@config_files @all_config_files %targets $config_time
 	%directories $version);
 
 # EDIT THIS to reflect all your MRTG config files
-BEGIN { @config_files = qw(/home/fadmin/mrtg/mrtg.cfg); }
+BEGIN { @config_files = qw(/home/fadmin/mrtg/cfg/mrtg.cfg
+	/www/html/auth/kas/mrtg.cfg); }
 
-$version = '0.4';
+$version = '0.5';
 
 sub handler ($)
 {
@@ -66,7 +68,7 @@ sub handler ($)
 		unless defined $targets{$stat};
 
 	print_error("Incorrect directory")
-		unless defined $targets{$stat}{direcory} || $targets{$stat}{directory} eq $dir;
+		unless defined $targets{$stat}{directory} || $targets{$stat}{directory} eq $dir;
 
 	my $tgt = $targets{$stat};
 
@@ -106,7 +108,7 @@ sub do_html($)
 	my @month = do_image($tgt, 'month');
 	my @year  = do_image($tgt, 'year');
 
-	http_headers('text/html');
+	http_headers('text/html', $tgt->{config});
 	print <<'EOF';
 <HTML>
 <HEAD>
@@ -169,7 +171,8 @@ EOF
 EOF
 	}
 
-	print_banner() unless defined $tgt->{options}{nobanner};
+	print_banner($tgt->{config})
+		unless defined $tgt->{options}{nobanner};
 
 	print $tgt->{pagefoot} if defined $tgt->{pagefoot};
 	print "\n", <<'EOF';
@@ -319,18 +322,18 @@ sub do_relpercent($$)
 	@percent;
 }
 
-sub http_headers($)
+sub http_headers($$)
 {
-	my ($content_type) = @_;
+	my ($content_type, $cfg) = @_;
 
 	print <<"EOF";
 Content-Type: $content_type
-Refresh: $config{refresh}
+Refresh: $cfg->{refresh}
 Pragma: no-cache
 EOF
 	# Expires header calculation stolen from CGI.pm
 	print strftime("Expires: %a, %d %b %Y %H:%M:%S GMT\n",
-		gmtime(time+$config{interval}));
+		gmtime(time+$cfg->{interval}));
 
 	print "\n";
 }
@@ -355,13 +358,13 @@ sub do_image($$)
 	my $withpeak;
 
 	if ($ext eq 'day') {
-		$seconds = strftime("%s", @t);
+		$seconds = timelocal(@t);
 		$back = 30*3600;	# 30 hours
 		$oldsec = $seconds - 86400;
 		$unscaled = 1 if $target->{unscaled} =~ /d/;
 		$withpeak = 1 if $target->{withpeak} =~ /d/;
 	} elsif ($ext eq 'week') {
-		$seconds = strftime("%s", @t);
+		$seconds = timelocal(@t);
 		$t[6] = ($t[6]+6) % 7;
 		$seconds -= $t[6]*86400;
 		$back = 8*86400;	# 8 days
@@ -370,7 +373,7 @@ sub do_image($$)
 		$withpeak = 1 if $target->{withpeak} =~ /w/;
 	} elsif ($ext eq 'month') {
 		$t[3] = 1;
-		$seconds = strftime("%s", @t);
+		$seconds = timelocal(@t);
 		$back = 36*86400;	# 36 days
 		$oldsec = $seconds - 30*86400; # FIXME (the right # of days!!)
 		$unscaled = 1 if $target->{unscaled} =~ /m/;
@@ -378,7 +381,7 @@ sub do_image($$)
 	} elsif ($ext eq 'year') {
 		$t[3] = 1;
 		$t[4] = 0;
-		$seconds = strftime("%s", @t);
+		$seconds = timelocal(@t);
 		$back = 396*86400;	# 365 + 31 days
 		$oldsec = $seconds - 365*86400; # FIXME (the right # of days!!)
 		$unscaled = 1 if $target->{unscaled} =~ /y/;
@@ -412,9 +415,10 @@ sub do_image($$)
 	return @rv if wantarray;
 
 	# Not in array context ==> print out the PNG file.
-	http_headers('image/png');
-		
 	open PNG, "<$file" or print_error("Can't open $file: $!");
+
+	http_headers('image/png', $target->{config});
+		
 	my $buf;
         # could be sendfile in Linux ;-)
         while(sysread PNG, $buf, 8192) {
@@ -440,23 +444,25 @@ sub common_args($$$)
 
 	$target->{url} = $q->url . '/' . $tdir . $name;
 
-	my $dir = $config{workdir};
-	$dir = $config{logdir}
-		if defined $config{logdir};
+	my $cfg = $target->{config};
+
+	my $dir = $cfg->{workdir};
+	$dir = $cfg->{logdir}
+		if defined $cfg->{logdir};
 
 	$target->{rrd} = $dir . '/' . $tdir . $name . '.rrd';
 
 	%{$target->{options}} = ()
 		unless defined %{$target->{options}};
 
-	$dir = $config{workdir};
-	$dir = $config{imagedir}
-		if defined $config{imagedir};
+	$dir = $cfg->{workdir};
+	$dir = $cfg->{imagedir}
+		if defined $cfg->{imagedir};
 
 	$target->{suppress} ||= '';
 
 	$target->{day}   = $dir . '/' . $tdir . $name
-		. '-day.png' unless $tdir =~ /d/;
+		. '-day.png' unless $target->{suppress} =~ /d/;
 	$target->{week}  = $dir . '/' . $tdir . $name
 		. '-week.png' unless $target->{suppress} =~ /w/;
 	$target->{month} = $dir . '/' . $tdir . $name
@@ -599,6 +605,7 @@ sub common_args($$$)
 sub try_read_config($)
 {
 	my ($prefix) = (@_);
+	$prefix =~ s/\/[^\/]*$//;
 
 	# Verify the version of RRDtool:
 	if (!defined $RRDs::VERSION || $RRDs::VERSION < 1.000331) {
@@ -634,11 +641,6 @@ sub try_read_config($)
 		directory => '',
 	);
 
-	%config = (
-		refresh => 300,
-		interval => 300,
-	);
-
 	%targets = ();
 
 	@all_config_files = @config_files;
@@ -649,36 +651,29 @@ sub try_read_config($)
 		%{$targets{'^'}} = ();
 		%{$targets{'$'}} = ();
 
-		read_mrtg_config($cfgfile, \%defaults, \$order);
+		my $cfgref = {
+			refresh => 300,
+			interval => 300,
+			icondir => $prefix
+		};
+
+		read_mrtg_config($cfgfile, \%defaults, $cfgref, \$order);
 	}
 
 	delete $targets{'^'};
 	delete $targets{_};
 	delete $targets{'$'};
 
-	if (defined $config{pathadd}) {
-		$ENV{PATH} .= ':'.$config{pathadd};
-	}
-
-#	if (defined $config{libadd}) {
-#		use lib $config{libadd}
-#	}
-
-	unless (defined $config{icondir}) {
-		$prefix =~ s/\/[^\/]*$//;
-		$config{icondir} = $prefix;
-	}
-
 	parse_directories();
 
 	$config_time = time;
 }
 
-sub read_mrtg_config($$$);
+sub read_mrtg_config($$$$);
 
-sub read_mrtg_config($$$)
+sub read_mrtg_config($$$$)
 {
-	my ($file, $def, $order) = @_;
+	my ($file, $def, $cfgref, $order) = @_;
 
 	my %defaults = %$def;
 
@@ -705,6 +700,7 @@ sub read_mrtg_config($$$)
 			unless (exists $targets{$tgt}) {
 				%{$targets{$tgt}} = %{$targets{_}};
 				$targets{$tgt}{order} = ++$$order;
+				$targets{$tgt}{config} = $cfgref;
 			}
 			if ($tgt eq '_' && $val eq '') {
 				if ($defaults{$opt}) {
@@ -728,15 +724,23 @@ sub read_mrtg_config($$$)
 			next;
 		} elsif (/^Include *: *(\S*)$/) {
 			push @all_config_files, $1;
-			read_mrtg_config($1, $def, $order);
+			read_mrtg_config($1, $def, $cfgref, $order);
 			next;
 		} elsif (/^([\w\d]+) *: *(\S.*)$/) {
 			my ($opt, $val) = (lc($1), $2);
-			$config{$opt} = $val;
+			$cfgref->{$opt} = $val;
 			next;
 		}
 		print_error("Parse error in $file near $_");
 	}
+
+	if (defined $cfgref->{pathadd}) {
+		$ENV{PATH} .= ':'.$cfgref->{pathadd};
+	}
+
+#	if (defined $cfgref->{libadd}) {
+#		use lib $cfgref->{libadd}
+#	}
 }
 
 sub parse_directories {
@@ -750,10 +754,25 @@ sub parse_directories {
 
 		my $prefix = '';
 		for my $component (split /\/+/, $dir) {
-			push (@{$directories{$prefix}{subdir}}, $component)
-				unless defined
-					$directories{$prefix.$component};
+			unless (defined $directories{$prefix.$component}) {
+				push (@{$directories{$prefix}{subdir}},
+					$component);
+
+				# For the directory, get the global parameters
+				# from the # config of the first item of the
+				# directory:
+				$directories{$prefix}{config} =
+					$targets{$name}{config};
+				$directories{$prefix}{bodytag} =
+					$targets{$name}{bodytag};
+			}
 			$prefix .= $component . '/';
+		}
+		unless (defined $directories{$dir}) {
+			$directories{$dir}{config} =
+				$targets{$name}{config};
+			$directories{$dir}{bodytag} =
+				$targets{$name}{bodytag};
 		}
 
 		push (@{$directories{$dir}{target}}, $name);
@@ -765,7 +784,7 @@ sub print_dir($) {
 
 	my $dir1 = $dir . '/';
 
-	http_headers('text/html');
+	http_headers('text/html', $directories{$dir}{config});
 
 	print <<EOF;
 <HTML>
@@ -773,6 +792,8 @@ sub print_dir($) {
 <TITLE>MRTG: Directory $dir1</TITLE>
 </HEAD>
 EOF
+	print $directories{$dir}{bodytag};
+
 	my $subdirs_printed;
 	if (defined @{$directories{$dir}{subdir}}) {
 		$subdirs_printed = 1;
@@ -812,11 +833,13 @@ EOF
 		print "    </TR>\n</TABLE>\n";
 	}
 
-	print_banner();
+	print_banner($directories{$dir}{config});
 	print "</BODY>\n</HTML>\n";
 }
 
-sub print_banner() {
+sub print_banner($) {
+	my $cfg = shift;
+
 	print <<EOF;
 
 <HR>
@@ -824,13 +847,13 @@ sub print_banner() {
 <tr>
 <td WIDTH=63><a ALT="MRTG"
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-l.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-l.png"></a></td>
 <td WIDTH=25><a ALT=""
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-m.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-m.png"></a></td>
 <td WIDTH=388><a ALT=""
     HREF="http://ee-staff.ethz.ch/~oetiker/webtools/mrtg/mrtg.html"><img
-BORDER=0 SRC="$config{icondir}/mrtg-r.png"></a></td>
+BORDER=0 SRC="$cfg->{icondir}/mrtg-r.png"></a></td>
 </tr>
 </table>
 <spacer TYPE=VERTICAL SIZE=4>
@@ -845,7 +868,7 @@ version 2.9.17</font></td>
 </tr><tr>
 <td></td>
 <td ALIGN=RIGHT><font FACE="Arial,Helvetica" SIZE=2>
-<and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:dlr\@bungi.com">&lt;dlr\@bungi.com&gt;</a></font>
+and&nbsp;<a HREF="http://www.bungi.com">Dave&nbsp;Rand</a>&nbsp;<a HREF="mailto:dlr\@bungi.com">&lt;dlr\@bungi.com&gt;</a></font>
 </td>
 <tr VALIGN=top>
 <td ALIGN=LEFT><font FACE="Arial,Helvetica" SIZE=2>
@@ -858,7 +881,7 @@ version 2.9.17</font></td>
 </tr>
 </table>
 EOF
-	print '<!--$Id: mrtg-rrd.cgi,v 1.12 2002/01/09 17:31:55 kas Exp $-->', "\n";
+	print '<!--$Id: mrtg-rrd.cgi,v 1.17 2002/02/25 15:09:04 kas Exp $-->', "\n";
 }
 
 sub dump_targets() {
@@ -875,13 +898,6 @@ sub dump_targets() {
 			}
 			print "\t$opt: ", $targets{$tgt}{$opt}, "\n";
 		}
-	}
-}
-
-sub dump_config() {
-	print "Config:\n";
-	for my $opt (keys %config) {
-		print $opt, ": ", $config{$opt}, "\n";
 	}
 }
 
